@@ -18,6 +18,7 @@ var (
 type Repository interface {
 	AddPerson(ctx context.Context, name, surname, studyDirection string, visitedEvent bool) (domain.Person, error)
 	MarkPersonAsVisited(ctx context.Context, name, surname string) (domain.Person, error)
+	DeletePerson(ctx context.Context, name, surname string) error
 }
 
 type Service struct {
@@ -47,4 +48,14 @@ func (s *Service) CheckInPerson(ctx context.Context, name, surname string) (doma
 	}
 
 	return s.repo.MarkPersonAsVisited(ctx, name, surname)
+}
+
+func (s *Service) DeletePerson(ctx context.Context, name, surname string) error {
+	name = strings.TrimSpace(name)
+	surname = strings.TrimSpace(surname)
+	if name == "" || surname == "" {
+		return ErrValidation
+	}
+
+	return s.repo.DeletePerson(ctx, name, surname)
 }

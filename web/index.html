@@ -8,7 +8,10 @@
   </head>
   <body>
     <main class="container">
-      <h1>Монитор гостей</h1>
+      <div class="header-row">
+        <h1>Монитор гостей</h1>
+        <button id="logout-btn" type="button" class="ghost-btn">Выйти</button>
+      </div>
       <p class="subtitle">Добавление и проверка прохода на мероприятие</p>
 
       <form id="guest-form" class="card">
@@ -35,6 +38,7 @@
         <div class="actions">
           <button id="add-btn" type="button">Добавить</button>
           <button id="check-btn" type="button">Проверить</button>
+          <button id="delete-btn" type="button" class="danger-btn">Удалить</button>
         </div>
       </form>
     </main>

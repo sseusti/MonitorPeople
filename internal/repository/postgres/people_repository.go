@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 
 	"MonitorPeople/internal/domain"
 	"MonitorPeople/internal/usecase/people"
@@ -107,8 +108,30 @@ func (r *PeopleRepository) MarkPersonAsVisited(ctx context.Context, name, surnam
 	return person, nil
 }
 
+func (r *PeopleRepository) DeletePerson(ctx context.Context, name, surname string) error {
+	const query = `
+		DELETE FROM visitors
+		WHERE name = $1 AND surname = $2
+	`
+
+	result, err := r.db.ExecContext(ctx, query, name, surname)
+	if err != nil {
+		return err
+	}
+
+	affectedRows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affectedRows == 0 {
+		return people.ErrPersonNotFound
+	}
+
+	return nil
+}
+
 func InitSchema(db *sql.DB) error {
-	query := `
+	visitorsQuery := `
 		CREATE TABLE IF NOT EXISTS visitors (
 			order_number BIGSERIAL PRIMARY KEY,
 			name TEXT NOT NULL,
@@ -119,6 +142,36 @@ func InitSchema(db *sql.DB) error {
 			CONSTRAINT visitors_name_surname_unique UNIQUE (name, surname)
 		)
 	`
-	_, err := db.Exec(query)
+	_, err := db.Exec(visitorsQuery)
+	if err != nil {
+		return err
+	}
+
+	adminUsersQuery := `
+		CREATE TABLE IF NOT EXISTS admin_users (
+			id BIGSERIAL PRIMARY KEY,
+			login TEXT NOT NULL UNIQUE,
+			password TEXT NOT NULL,
+			is_active BOOLEAN NOT NULL DEFAULT TRUE,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`
+	_, err = db.Exec(adminUsersQuery)
+	return err
+}
+
+func EnsureAdminUser(db *sql.DB, login, password string) error {
+	login = strings.TrimSpace(login)
+	password = strings.TrimSpace(password)
+	if login == "" || password == "" {
+		return nil
+	}
+
+	const query = `
+		INSERT INTO admin_users (login, password)
+		VALUES ($1, $2)
+		ON CONFLICT (login) DO NOTHING
+	`
+	_, err := db.Exec(query, login, password)
 	return err
 }

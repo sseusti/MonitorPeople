@@ -14,6 +14,7 @@ import (
 type PeopleService interface {
 	AddPerson(ctx context.Context, name, surname, studyDirection string, visitedEvent bool) (domain.Person, error)
 	CheckInPerson(ctx context.Context, name, surname string) (domain.Person, error)
+	DeletePerson(ctx context.Context, name, surname string) error
 }
 
 type PeopleHandler struct {
@@ -39,6 +40,7 @@ func NewPeopleHandler(service PeopleService) *PeopleHandler {
 func (h *PeopleHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/people", h.handleCreatePerson)
 	mux.HandleFunc("/people/check-in", h.handleCheckIn)
+	mux.HandleFunc("/people/delete", h.handleDeletePerson)
 }
 
 func (h *PeopleHandler) handleCreatePerson(w http.ResponseWriter, r *http.Request) {
@@ -104,4 +106,32 @@ func (h *PeopleHandler) handleCheckIn(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(person); err != nil {
 		log.Printf("encode response error: %v", err)
 	}
+}
+
+func (h *PeopleHandler) handleDeletePerson(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req checkInRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json body", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.service.DeletePerson(r.Context(), req.Name, req.Surname); err != nil {
+		switch {
+		case errors.Is(err, people.ErrValidation):
+			http.Error(w, "name and surname are required", http.StatusBadRequest)
+		case errors.Is(err, people.ErrPersonNotFound):
+			http.Error(w, "person not found", http.StatusNotFound)
+		default:
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
 }

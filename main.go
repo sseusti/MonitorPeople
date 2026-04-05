@@ -12,6 +12,7 @@ import (
 
 	"MonitorPeople/internal/repository/postgres"
 	httpapi "MonitorPeople/internal/transport/http"
+	"MonitorPeople/internal/usecase/auth"
 	"MonitorPeople/internal/usecase/people"
 
 	"github.com/lib/pq"
@@ -28,13 +29,27 @@ func main() {
 		log.Fatalf("init schema: %v", err)
 	}
 
+	adminLogin := envOrDefault("ADMIN_LOGIN", "admin")
+	adminPassword := envOrDefault("ADMIN_PASSWORD", "admin123")
+	if err := postgres.EnsureAdminUser(db, adminLogin, adminPassword); err != nil {
+		log.Fatalf("ensure admin user: %v", err)
+	}
+
 	repo := postgres.NewPeopleRepository(db)
 	service := people.NewService(repo)
 	handler := httpapi.NewPeopleHandler(service)
+	authRepo := postgres.NewAuthRepository(db)
+	authService := auth.NewService(authRepo)
+	authHandler := httpapi.NewAuthHandler(authService)
+
+	protectedMux := http.NewServeMux()
+	handler.RegisterRoutes(protectedMux)
+	protectedMux.Handle("/", http.FileServer(http.Dir("web")))
 
 	mux := http.NewServeMux()
-	handler.RegisterRoutes(mux)
-	mux.Handle("/", http.FileServer(http.Dir("web")))
+	authHandler.RegisterPublicRoutes(mux)
+	mux.Handle("/login.js", http.FileServer(http.Dir("web")))
+	mux.Handle("/", authHandler.RequireAuth(protectedMux))
 
 	log.Println("server started on :8080")
 	if err := http.ListenAndServe(":8080", mux); err != nil {
@@ -116,4 +131,12 @@ func ensureDatabaseExists(dsn string) error {
 	}
 
 	return nil
+}
+
+func envOrDefault(key, fallback string) string {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	return value
 }
