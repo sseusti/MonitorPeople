@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Monitor People</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>Монитор гостей</h1>
+      <p class="subtitle">Добавление и проверка прохода на мероприятие</p>
+
+      <form id="guest-form" class="card">
+        <label>
+          Имя
+          <input id="name" name="name" type="text" required />
+        </label>
+
+        <label>
+          Фамилия
+          <input id="surname" name="surname" type="text" required />
+        </label>
+
+        <label>
+          Направление обучения
+          <input id="studyDirection" name="studyDirection" type="text" required />
+        </label>
+
+        <label class="checkbox">
+          <input id="visitedEvent" name="visitedEvent" type="checkbox" />
+          Уже отметил проход
+        </label>
+
+        <div class="actions">
+          <button id="add-btn" type="button">Добавить</button>
+          <button id="check-btn" type="button">Проверить</button>
+        </div>
+      </form>
+    </main>
+
+    <div id="toast-root" class="toast-root"></div>
+    <script src="/app.js" defer></script>
+  </body>
+</html>
