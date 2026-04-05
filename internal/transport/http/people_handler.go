@@ -77,6 +77,8 @@ func (h *PeopleHandler) handleCreatePerson(w http.ResponseWriter, r *http.Reques
 		switch {
 		case errors.Is(err, people.ErrValidation):
 			http.Error(w, "name, surname and studyDirection are required", http.StatusBadRequest)
+		case errors.Is(err, people.ErrInvalidProgram):
+			http.Error(w, "invalid study direction", http.StatusBadRequest)
 		case errors.Is(err, people.ErrPersonAlreadyExists):
 			http.Error(w, "person already exists", http.StatusConflict)
 		default:
@@ -167,6 +169,10 @@ func (h *PeopleHandler) handleListPeople(w http.ResponseWriter, r *http.Request)
 
 	peopleList, err := h.service.ListPeople(r.Context(), filter)
 	if err != nil {
+		if errors.Is(err, people.ErrInvalidProgram) {
+			http.Error(w, "invalid study direction", http.StatusBadRequest)
+			return
+		}
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -189,6 +195,10 @@ func (h *PeopleHandler) handleProgramStats(w http.ResponseWriter, r *http.Reques
 
 	stats, err := h.service.GetVisitedByProgramStats(r.Context(), filter)
 	if err != nil {
+		if errors.Is(err, people.ErrInvalidProgram) {
+			http.Error(w, "invalid study direction", http.StatusBadRequest)
+			return
+		}
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}

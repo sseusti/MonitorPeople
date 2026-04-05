@@ -39,6 +39,7 @@ function localizeError(message) {
         "person already exists": "Такой человек уже добавлен",
         "name and surname are required": "Нужно указать имя и фамилию",
         "name, surname and studyDirection are required": "Нужно указать имя, фамилию и направление обучения",
+        "invalid study direction": "Выбрано некорректное направление",
         "visited must be true, false or all": "Некорректный фильтр посещения",
         "invalid json body": "Некорректные данные запроса",
         unauthorized: "Сессия истекла. Войдите снова",

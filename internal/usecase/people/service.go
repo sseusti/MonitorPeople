@@ -13,7 +13,15 @@ var (
 	ErrPersonNotFound      = errors.New("person not found")
 	ErrPersonAlreadyPassed = errors.New("such person already passed")
 	ErrPersonAlreadyExists = errors.New("person already exists")
+	ErrInvalidProgram      = errors.New("invalid study direction")
 )
+
+var allowedPrograms = map[string]struct{}{
+	"КНТ":  {},
+	"МББЭ": {},
+	"ЦМ":   {},
+	"Ю":    {},
+}
 
 type Repository interface {
 	AddPerson(ctx context.Context, name, surname, studyDirection string, visitedEvent bool) (domain.Person, error)
@@ -37,6 +45,9 @@ func (s *Service) AddPerson(ctx context.Context, name, surname, studyDirection s
 	studyDirection = strings.TrimSpace(studyDirection)
 	if name == "" || surname == "" || studyDirection == "" {
 		return domain.Person{}, ErrValidation
+	}
+	if !isAllowedProgram(studyDirection) {
+		return domain.Person{}, ErrInvalidProgram
 	}
 
 	return s.repo.AddPerson(ctx, name, surname, studyDirection, visitedEvent)
@@ -64,10 +75,21 @@ func (s *Service) DeletePerson(ctx context.Context, name, surname string) error 
 
 func (s *Service) ListPeople(ctx context.Context, filter domain.PeopleFilter) ([]domain.Person, error) {
 	filter.StudyDirection = strings.TrimSpace(filter.StudyDirection)
+	if filter.StudyDirection != "" && !isAllowedProgram(filter.StudyDirection) {
+		return nil, ErrInvalidProgram
+	}
 	return s.repo.ListPeople(ctx, filter)
 }
 
 func (s *Service) GetVisitedByProgramStats(ctx context.Context, filter domain.PeopleFilter) ([]domain.ProgramStat, error) {
 	filter.StudyDirection = strings.TrimSpace(filter.StudyDirection)
+	if filter.StudyDirection != "" && !isAllowedProgram(filter.StudyDirection) {
+		return nil, ErrInvalidProgram
+	}
 	return s.repo.GetVisitedByProgramStats(ctx, filter)
+}
+
+func isAllowedProgram(program string) bool {
+	_, ok := allowedPrograms[program]
+	return ok
 }

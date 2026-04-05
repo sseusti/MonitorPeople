@@ -17,7 +17,7 @@ type ToastType = "ok" | "error";
 const form = document.getElementById("guest-form") as HTMLFormElement;
 const nameInput = document.getElementById("name") as HTMLInputElement;
 const surnameInput = document.getElementById("surname") as HTMLInputElement;
-const studyDirectionInput = document.getElementById("studyDirection") as HTMLInputElement;
+const studyDirectionInput = document.getElementById("studyDirection") as HTMLSelectElement;
 const visitedInput = document.getElementById("visitedEvent") as HTMLInputElement;
 const addButton = document.getElementById("add-btn") as HTMLButtonElement;
 const checkButton = document.getElementById("check-btn") as HTMLButtonElement;
@@ -25,7 +25,7 @@ const deleteButton = document.getElementById("delete-btn") as HTMLButtonElement;
 const logoutButton = document.getElementById("logout-btn") as HTMLButtonElement;
 const refreshStatsButton = document.getElementById("refresh-stats-btn") as HTMLButtonElement;
 const filterVisited = document.getElementById("filter-visited") as HTMLSelectElement;
-const filterStudyDirection = document.getElementById("filter-studyDirection") as HTMLInputElement;
+const filterStudyDirection = document.getElementById("filter-studyDirection") as HTMLSelectElement;
 const programStatsList = document.getElementById("program-stats-list") as HTMLUListElement;
 const guestsTbody = document.getElementById("guests-tbody") as HTMLTableSectionElement;
 const toastRoot = document.getElementById("toast-root") as HTMLDivElement;
@@ -57,6 +57,7 @@ function localizeError(message: string): string {
     "person already exists": "Такой человек уже добавлен",
     "name and surname are required": "Нужно указать имя и фамилию",
     "name, surname and studyDirection are required": "Нужно указать имя, фамилию и направление обучения",
+    "invalid study direction": "Выбрано некорректное направление",
     "visited must be true, false or all": "Некорректный фильтр посещения",
     "invalid json body": "Некорректные данные запроса",
     unauthorized: "Сессия истекла. Войдите снова",

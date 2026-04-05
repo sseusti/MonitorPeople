@@ -27,7 +27,12 @@
 
         <label>
           Направление обучения
-          <input id="studyDirection" name="studyDirection" type="text" required />
+          <select id="studyDirection" name="studyDirection" required>
+            <option value="КНТ">КНТ</option>
+            <option value="МББЭ">МББЭ</option>
+            <option value="ЦМ">ЦМ</option>
+            <option value="Ю">Ю</option>
+          </select>
         </label>
 
         <label class="checkbox">
@@ -60,7 +65,13 @@
 
           <label>
             Направление
-            <input id="filter-studyDirection" type="text" placeholder="Например, Backend" />
+            <select id="filter-studyDirection">
+              <option value="">Все направления</option>
+              <option value="КНТ">КНТ</option>
+              <option value="МББЭ">МББЭ</option>
+              <option value="ЦМ">ЦМ</option>
+              <option value="Ю">Ю</option>
+            </select>
           </label>
         </div>
 
