@@ -66,6 +66,15 @@ input[type="text"] {
   font-size: 15px;
 }
 
+select {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 15px;
+  background: #fff;
+}
+
 .checkbox {
   display: flex;
   align-items: center;
@@ -105,6 +114,66 @@ button:disabled {
   background: #e5e7eb;
   color: #111827;
   width: auto;
+}
+
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.stats-block {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.stats-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+}
+
+.table-wrap {
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.guests-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 560px;
+}
+
+.guests-table th,
+.guests-table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.guests-table tr:last-child td {
+  border-bottom: 0;
 }
 
 .toast-root {
@@ -155,6 +224,10 @@ button:disabled {
   }
 
   .actions {
+    grid-template-columns: 1fr;
+  }
+
+  .filters {
     grid-template-columns: 1fr;
   }
 }

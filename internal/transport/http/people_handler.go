@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strings"
 
 	"MonitorPeople/internal/domain"
 	"MonitorPeople/internal/usecase/people"
@@ -15,6 +16,8 @@ type PeopleService interface {
 	AddPerson(ctx context.Context, name, surname, studyDirection string, visitedEvent bool) (domain.Person, error)
 	CheckInPerson(ctx context.Context, name, surname string) (domain.Person, error)
 	DeletePerson(ctx context.Context, name, surname string) error
+	ListPeople(ctx context.Context, filter domain.PeopleFilter) ([]domain.Person, error)
+	GetVisitedByProgramStats(ctx context.Context, filter domain.PeopleFilter) ([]domain.ProgramStat, error)
 }
 
 type PeopleHandler struct {
@@ -47,6 +50,14 @@ func (h *PeopleHandler) CheckInHandler() http.HandlerFunc {
 
 func (h *PeopleHandler) DeletePersonHandler() http.HandlerFunc {
 	return h.handleDeletePerson
+}
+
+func (h *PeopleHandler) ListPeopleHandler() http.HandlerFunc {
+	return h.handleListPeople
+}
+
+func (h *PeopleHandler) ProgramStatsHandler() http.HandlerFunc {
+	return h.handleProgramStats
 }
 
 func (h *PeopleHandler) handleCreatePerson(w http.ResponseWriter, r *http.Request) {
@@ -140,4 +151,72 @@ func (h *PeopleHandler) handleDeletePerson(w http.ResponseWriter, r *http.Reques
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+}
+
+func (h *PeopleHandler) handleListPeople(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	filter, err := filterFromQuery(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	peopleList, err := h.service.ListPeople(r.Context(), filter)
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(peopleList)
+}
+
+func (h *PeopleHandler) handleProgramStats(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	filter, err := filterFromQuery(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	stats, err := h.service.GetVisitedByProgramStats(r.Context(), filter)
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(stats)
+}
+
+func filterFromQuery(r *http.Request) (domain.PeopleFilter, error) {
+	query := r.URL.Query()
+	filter := domain.PeopleFilter{
+		StudyDirection: strings.TrimSpace(query.Get("studyDirection")),
+	}
+
+	visitedRaw := strings.TrimSpace(query.Get("visited"))
+	if visitedRaw == "" || visitedRaw == "all" {
+		return filter, nil
+	}
+	if visitedRaw == "true" {
+		visitedTrue := true
+		filter.Visited = &visitedTrue
+		return filter, nil
+	}
+	if visitedRaw == "false" {
+		visitedFalse := false
+		filter.Visited = &visitedFalse
+		return filter, nil
+	}
+
+	return domain.PeopleFilter{}, errors.New("visited must be true, false or all")
 }

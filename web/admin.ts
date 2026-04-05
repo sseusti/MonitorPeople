@@ -7,6 +7,11 @@ type Person = {
   checkInTime?: string;
 };
 
+type ProgramStat = {
+  studyDirection: string;
+  count: number;
+};
+
 type ToastType = "ok" | "error";
 
 const form = document.getElementById("guest-form") as HTMLFormElement;
@@ -18,6 +23,11 @@ const addButton = document.getElementById("add-btn") as HTMLButtonElement;
 const checkButton = document.getElementById("check-btn") as HTMLButtonElement;
 const deleteButton = document.getElementById("delete-btn") as HTMLButtonElement;
 const logoutButton = document.getElementById("logout-btn") as HTMLButtonElement;
+const refreshStatsButton = document.getElementById("refresh-stats-btn") as HTMLButtonElement;
+const filterVisited = document.getElementById("filter-visited") as HTMLSelectElement;
+const filterStudyDirection = document.getElementById("filter-studyDirection") as HTMLInputElement;
+const programStatsList = document.getElementById("program-stats-list") as HTMLUListElement;
+const guestsTbody = document.getElementById("guests-tbody") as HTMLTableSectionElement;
 const toastRoot = document.getElementById("toast-root") as HTMLDivElement;
 
 function showToast(message: string, type: ToastType): void {
@@ -25,7 +35,6 @@ function showToast(message: string, type: ToastType): void {
   toast.className = `toast ${type}`;
   toast.textContent = message;
   toastRoot.appendChild(toast);
-
   window.setTimeout(() => {
     toast.remove();
   }, 2800);
@@ -41,6 +50,23 @@ function readRequiredNames(): { name: string; surname: string } | null {
   return { name, surname };
 }
 
+function localizeError(message: string): string {
+  const map: Record<string, string> = {
+    "person not found": "Человек не найден",
+    "such person already passed": "Этот человек уже прошел",
+    "person already exists": "Такой человек уже добавлен",
+    "name and surname are required": "Нужно указать имя и фамилию",
+    "name, surname and studyDirection are required": "Нужно указать имя, фамилию и направление обучения",
+    "visited must be true, false or all": "Некорректный фильтр посещения",
+    "invalid json body": "Некорректные данные запроса",
+    unauthorized: "Сессия истекла. Войдите снова",
+    forbidden: "Нет прав для этого действия",
+    "internal server error": "Внутренняя ошибка сервера",
+    "Request failed": "Не удалось выполнить запрос",
+  };
+  return map[message] ?? message;
+}
+
 async function parseResponse<T>(response: Response): Promise<T> {
   if (response.ok) {
     return (await response.json()) as T;
@@ -49,28 +75,83 @@ async function parseResponse<T>(response: Response): Promise<T> {
   throw new Error(localizeError(errorText || "Request failed"));
 }
 
-function localizeError(message: string): string {
-  const map: Record<string, string> = {
-    "person not found": "Человек не найден",
-    "such person already passed": "Этот человек уже прошел",
-    "person already exists": "Такой человек уже добавлен",
-    "name and surname are required": "Нужно указать имя и фамилию",
-    "name, surname and studyDirection are required": "Нужно указать имя, фамилию и направление обучения",
-    "invalid json body": "Некорректные данные запроса",
-    "method not allowed": "Метод запроса не поддерживается",
-    unauthorized: "Сессия истекла. Войдите снова",
-    forbidden: "Нет прав для этого действия",
-    "internal server error": "Внутренняя ошибка сервера",
-    "Request failed": "Не удалось выполнить запрос",
-  };
-
-  return map[message] ?? message;
-}
-
 function setBusy(isBusy: boolean): void {
   addButton.disabled = isBusy;
   checkButton.disabled = isBusy;
   deleteButton.disabled = isBusy;
+}
+
+function getFilterQuery(): string {
+  const params = new URLSearchParams();
+  const visited = filterVisited.value.trim();
+  const studyDirection = filterStudyDirection.value.trim();
+  if (visited) {
+    params.set("visited", visited);
+  }
+  if (studyDirection) {
+    params.set("studyDirection", studyDirection);
+  }
+  const query = params.toString();
+  return query ? `?${query}` : "";
+}
+
+function renderGuestsTable(people: Person[]): void {
+  guestsTbody.innerHTML = "";
+  if (people.length === 0) {
+    const row = document.createElement("tr");
+    row.innerHTML = `<td colspan="5">Ничего не найдено</td>`;
+    guestsTbody.appendChild(row);
+    return;
+  }
+
+  for (const person of people) {
+    const row = document.createElement("tr");
+    const status = person.visitedEvent ? "Пришел" : "Не пришел";
+    row.innerHTML = `
+      <td>${person.orderNumber}</td>
+      <td>${person.name}</td>
+      <td>${person.surname}</td>
+      <td>${person.studyDirection}</td>
+      <td>${status}</td>
+    `;
+    guestsTbody.appendChild(row);
+  }
+}
+
+function renderProgramStats(stats: ProgramStat[]): void {
+  programStatsList.innerHTML = "";
+  if (stats.length === 0) {
+    const item = document.createElement("li");
+    item.textContent = "Нет данных по пришедшим гостям";
+    programStatsList.appendChild(item);
+    return;
+  }
+
+  for (const stat of stats) {
+    const item = document.createElement("li");
+    item.textContent = `${stat.studyDirection}: ${stat.count}`;
+    programStatsList.appendChild(item);
+  }
+}
+
+async function refreshStatistics(showSuccessToast = false): Promise<void> {
+  refreshStatsButton.disabled = true;
+  try {
+    const query = getFilterQuery();
+    const [people, stats] = await Promise.all([
+      parseResponse<Person[]>(await fetch(`/people/list${query}`)),
+      parseResponse<ProgramStat[]>(await fetch(`/people/stats/programs${query}`)),
+    ]);
+    renderGuestsTable(people);
+    renderProgramStats(stats);
+    if (showSuccessToast) {
+      showToast("Статистика обновлена", "ok");
+    }
+  } catch (error) {
+    showToast((error as Error).message, "error");
+  } finally {
+    refreshStatsButton.disabled = false;
+  }
 }
 
 async function addGuest(): Promise<void> {
@@ -99,6 +180,7 @@ async function addGuest(): Promise<void> {
     );
 
     showToast(`Гость добавлен (#${person.orderNumber})`, "ok");
+    await refreshStatistics();
   } catch (error) {
     showToast((error as Error).message, "error");
   } finally {
@@ -119,8 +201,8 @@ async function checkGuest(): Promise<void> {
         body: JSON.stringify(payloadNames),
       }),
     );
-
     showToast(`${person.name} ${person.surname} успешно отмечен`, "ok");
+    await refreshStatistics();
   } catch (error) {
     showToast((error as Error).message, "error");
   } finally {
@@ -141,8 +223,8 @@ async function deleteGuest(): Promise<void> {
         body: JSON.stringify(payloadNames),
       }),
     );
-
     showToast(`${payloadNames.name} ${payloadNames.surname} удален`, "ok");
+    await refreshStatistics();
   } catch (error) {
     showToast((error as Error).message, "error");
   } finally {
@@ -175,7 +257,21 @@ logoutButton.addEventListener("click", () => {
   logout();
 });
 
+refreshStatsButton.addEventListener("click", () => {
+  refreshStatistics(true);
+});
+
+filterVisited.addEventListener("change", () => {
+  refreshStatistics();
+});
+
+filterStudyDirection.addEventListener("input", () => {
+  refreshStatistics();
+});
+
 form.addEventListener("submit", (event) => {
   event.preventDefault();
   addGuest();
 });
+
+refreshStatistics();

@@ -19,6 +19,8 @@ type Repository interface {
 	AddPerson(ctx context.Context, name, surname, studyDirection string, visitedEvent bool) (domain.Person, error)
 	MarkPersonAsVisited(ctx context.Context, name, surname string) (domain.Person, error)
 	DeletePerson(ctx context.Context, name, surname string) error
+	ListPeople(ctx context.Context, filter domain.PeopleFilter) ([]domain.Person, error)
+	GetVisitedByProgramStats(ctx context.Context, filter domain.PeopleFilter) ([]domain.ProgramStat, error)
 }
 
 type Service struct {
@@ -58,4 +60,14 @@ func (s *Service) DeletePerson(ctx context.Context, name, surname string) error 
 	}
 
 	return s.repo.DeletePerson(ctx, name, surname)
+}
+
+func (s *Service) ListPeople(ctx context.Context, filter domain.PeopleFilter) ([]domain.Person, error) {
+	filter.StudyDirection = strings.TrimSpace(filter.StudyDirection)
+	return s.repo.ListPeople(ctx, filter)
+}
+
+func (s *Service) GetVisitedByProgramStats(ctx context.Context, filter domain.PeopleFilter) ([]domain.ProgramStat, error) {
+	filter.StudyDirection = strings.TrimSpace(filter.StudyDirection)
+	return s.repo.GetVisitedByProgramStats(ctx, filter)
 }

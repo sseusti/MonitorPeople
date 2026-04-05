@@ -62,6 +62,8 @@ func main() {
 	mux.Handle("/people/check-in", authHandler.RequireAuth(http.HandlerFunc(handler.CheckInHandler())))
 	mux.Handle("/people", authHandler.RequireAdmin(http.HandlerFunc(handler.CreatePersonHandler())))
 	mux.Handle("/people/delete", authHandler.RequireAdmin(http.HandlerFunc(handler.DeletePersonHandler())))
+	mux.Handle("/people/list", authHandler.RequireAdmin(http.HandlerFunc(handler.ListPeopleHandler())))
+	mux.Handle("/people/stats/programs", authHandler.RequireAdmin(http.HandlerFunc(handler.ProgramStatsHandler())))
 
 	log.Println("server started on :8080")
 	if err := http.ListenAndServe(":8080", mux); err != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 
 	"MonitorPeople/internal/domain"
@@ -128,6 +129,100 @@ func (r *PeopleRepository) DeletePerson(ctx context.Context, name, surname strin
 	}
 
 	return nil
+}
+
+func (r *PeopleRepository) ListPeople(ctx context.Context, filter domain.PeopleFilter) ([]domain.Person, error) {
+	query := `
+		SELECT order_number, name, surname, study_direction, visited_event, check_in_time
+		FROM visitors
+	`
+	whereClause, args := buildVisitorsFilter(filter)
+	if whereClause != "" {
+		query += " WHERE " + whereClause
+	}
+	query += " ORDER BY order_number"
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	peopleList := make([]domain.Person, 0)
+	for rows.Next() {
+		var person domain.Person
+		if err := rows.Scan(
+			&person.OrderNumber,
+			&person.Name,
+			&person.Surname,
+			&person.StudyDirection,
+			&person.VisitedEvent,
+			&person.CheckInTime,
+		); err != nil {
+			return nil, err
+		}
+		peopleList = append(peopleList, person)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return peopleList, nil
+}
+
+func (r *PeopleRepository) GetVisitedByProgramStats(ctx context.Context, filter domain.PeopleFilter) ([]domain.ProgramStat, error) {
+	statsFilter := filter
+	visitedTrue := true
+	statsFilter.Visited = &visitedTrue
+
+	query := `
+		SELECT study_direction, COUNT(*)
+		FROM visitors
+	`
+	whereClause, args := buildVisitorsFilter(statsFilter)
+	if whereClause != "" {
+		query += " WHERE " + whereClause
+	}
+	query += " GROUP BY study_direction ORDER BY COUNT(*) DESC, study_direction"
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	stats := make([]domain.ProgramStat, 0)
+	for rows.Next() {
+		var stat domain.ProgramStat
+		if err := rows.Scan(&stat.StudyDirection, &stat.Count); err != nil {
+			return nil, err
+		}
+		stats = append(stats, stat)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return stats, nil
+}
+
+func buildVisitorsFilter(filter domain.PeopleFilter) (string, []any) {
+	parts := make([]string, 0, 2)
+	args := make([]any, 0, 2)
+	argPos := 1
+
+	if filter.Visited != nil {
+		parts = append(parts, fmt.Sprintf("visited_event = $%d", argPos))
+		args = append(args, *filter.Visited)
+		argPos++
+	}
+
+	if filter.StudyDirection != "" {
+		parts = append(parts, fmt.Sprintf("study_direction = $%d", argPos))
+		args = append(args, filter.StudyDirection)
+	}
+
+	return strings.Join(parts, " AND "), args
 }
 
 func InitSchema(db *sql.DB) error {

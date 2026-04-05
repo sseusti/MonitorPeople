@@ -41,6 +41,49 @@
           <button id="delete-btn" type="button" class="danger-btn">Удалить</button>
         </div>
       </form>
+
+      <section class="card">
+        <div class="section-head">
+          <h2>Статистика гостей</h2>
+          <button id="refresh-stats-btn" type="button" class="ghost-btn">Обновить</button>
+        </div>
+
+        <div class="filters">
+          <label>
+            Статус посещения
+            <select id="filter-visited">
+              <option value="all">Все</option>
+              <option value="true">Пришли</option>
+              <option value="false">Не пришли</option>
+            </select>
+          </label>
+
+          <label>
+            Направление
+            <input id="filter-studyDirection" type="text" placeholder="Например, Backend" />
+          </label>
+        </div>
+
+        <div class="stats-block">
+          <h3>Количество пришедших по направлениям</h3>
+          <ul id="program-stats-list" class="stats-list"></ul>
+        </div>
+
+        <div class="table-wrap">
+          <table class="guests-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Имя</th>
+                <th>Фамилия</th>
+                <th>Направление</th>
+                <th>Статус</th>
+              </tr>
+            </thead>
+            <tbody id="guests-tbody"></tbody>
+          </table>
+        </div>
+      </section>
     </main>
 
     <div id="toast-root" class="toast-root"></div>
