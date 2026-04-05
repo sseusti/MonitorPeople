@@ -37,10 +37,16 @@ func NewPeopleHandler(service PeopleService) *PeopleHandler {
 	return &PeopleHandler{service: service}
 }
 
-func (h *PeopleHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/people", h.handleCreatePerson)
-	mux.HandleFunc("/people/check-in", h.handleCheckIn)
-	mux.HandleFunc("/people/delete", h.handleDeletePerson)
+func (h *PeopleHandler) CreatePersonHandler() http.HandlerFunc {
+	return h.handleCreatePerson
+}
+
+func (h *PeopleHandler) CheckInHandler() http.HandlerFunc {
+	return h.handleCheckIn
+}
+
+func (h *PeopleHandler) DeletePersonHandler() http.HandlerFunc {
+	return h.handleDeletePerson
 }
 
 func (h *PeopleHandler) handleCreatePerson(w http.ResponseWriter, r *http.Request) {

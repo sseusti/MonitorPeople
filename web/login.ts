@@ -50,7 +50,8 @@ async function login(): Promise<void> {
       return;
     }
 
-    window.location.href = "/";
+    const payload = (await response.json()) as { redirectPath?: string };
+    window.location.href = payload.redirectPath ?? "/";
   } catch {
     showToast("Сервер недоступен");
   } finally {

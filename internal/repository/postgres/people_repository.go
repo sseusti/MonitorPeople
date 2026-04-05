@@ -152,26 +152,47 @@ func InitSchema(db *sql.DB) error {
 			id BIGSERIAL PRIMARY KEY,
 			login TEXT NOT NULL UNIQUE,
 			password TEXT NOT NULL,
+			role TEXT NOT NULL DEFAULT 'admin',
 			is_active BOOLEAN NOT NULL DEFAULT TRUE,
-			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			CONSTRAINT admin_users_role_check CHECK (role IN ('admin', 'entrance'))
 		)
 	`
 	_, err = db.Exec(adminUsersQuery)
-	return err
+	if err != nil {
+		return err
+	}
+
+	alterRoleColumnQuery := `
+		ALTER TABLE admin_users
+		ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'admin'
+	`
+	_, err = db.Exec(alterRoleColumnQuery)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Exec("UPDATE admin_users SET role = 'admin' WHERE role IS NULL")
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func EnsureAdminUser(db *sql.DB, login, password string) error {
+func EnsureAuthUser(db *sql.DB, login, password, role string) error {
 	login = strings.TrimSpace(login)
 	password = strings.TrimSpace(password)
-	if login == "" || password == "" {
+	role = strings.TrimSpace(role)
+	if login == "" || password == "" || role == "" {
 		return nil
 	}
 
 	const query = `
-		INSERT INTO admin_users (login, password)
-		VALUES ($1, $2)
+		INSERT INTO admin_users (login, password, role)
+		VALUES ($1, $2, $3)
 		ON CONFLICT (login) DO NOTHING
 	`
-	_, err := db.Exec(query, login, password)
+	_, err := db.Exec(query, login, password, role)
 	return err
 }

@@ -78,6 +78,10 @@ input[type="text"] {
   gap: 10px;
 }
 
+.actions.single {
+  grid-template-columns: 1fr;
+}
+
 button {
   border: 0;
   border-radius: 8px;

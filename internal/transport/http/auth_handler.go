@@ -14,16 +14,26 @@ import (
 	"MonitorPeople/internal/usecase/auth"
 )
 
-const sessionCookieName = "monitor_people_session"
+const (
+	sessionCookieName = "monitor_people_session"
+	roleAdmin         = "admin"
+	roleEntrance      = "entrance"
+)
+
+type sessionData struct {
+	Login     string
+	Role      string
+	ExpiresAt time.Time
+}
 
 type AuthHandler struct {
 	service  AuthService
 	mu       sync.Mutex
-	sessions map[string]time.Time
+	sessions map[string]sessionData
 }
 
 type AuthService interface {
-	Login(ctx context.Context, login, password string) error
+	Login(ctx context.Context, login, password string) (auth.User, error)
 }
 
 type loginRequest struct {
@@ -34,7 +44,7 @@ type loginRequest struct {
 func NewAuthHandler(service AuthService) *AuthHandler {
 	return &AuthHandler{
 		service:  service,
-		sessions: make(map[string]time.Time),
+		sessions: make(map[string]sessionData),
 	}
 }
 
@@ -46,7 +56,7 @@ func (h *AuthHandler) RegisterPublicRoutes(mux *http.ServeMux) {
 
 func (h *AuthHandler) RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !h.isAuthorized(r) {
+		if _, ok := h.sessionFromRequest(r); !ok {
 			if strings.HasPrefix(r.URL.Path, "/people") || strings.HasPrefix(r.URL.Path, "/auth/") {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
@@ -58,12 +68,75 @@ func (h *AuthHandler) RequireAuth(next http.Handler) http.Handler {
 	})
 }
 
+func (h *AuthHandler) RequireAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		session, ok := h.sessionFromRequest(r)
+		if !ok {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if session.Role != roleAdmin {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (h *AuthHandler) HandleHome(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	session, ok := h.sessionFromRequest(r)
+	if !ok {
+		http.Redirect(w, r, "/login", http.StatusFound)
+		return
+	}
+
+	if session.Role == roleAdmin {
+		http.Redirect(w, r, "/admin", http.StatusFound)
+		return
+	}
+	http.Redirect(w, r, "/entrance", http.StatusFound)
+}
+
+func (h *AuthHandler) HandleAdminPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	session, ok := h.sessionFromRequest(r)
+	if !ok {
+		http.Redirect(w, r, "/login", http.StatusFound)
+		return
+	}
+	if session.Role != roleAdmin {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	http.ServeFile(w, r, "web/admin.html")
+}
+
+func (h *AuthHandler) HandleEntrancePage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := h.sessionFromRequest(r); !ok {
+		http.Redirect(w, r, "/login", http.StatusFound)
+		return
+	}
+	http.ServeFile(w, r, "web/entrance.html")
+}
+
 func (h *AuthHandler) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if h.isAuthorized(r) {
+	if _, ok := h.sessionFromRequest(r); ok {
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
 	}
@@ -82,7 +155,8 @@ func (h *AuthHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.Login(r.Context(), req.Login, req.Password); err != nil {
+	user, err := h.service.Login(r.Context(), req.Login, req.Password)
+	if err != nil {
 		if errors.Is(err, auth.ErrInvalidCredentials) {
 			http.Error(w, "invalid login or password", http.StatusUnauthorized)
 			return
@@ -99,7 +173,11 @@ func (h *AuthHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	expiresAt := time.Now().Add(24 * time.Hour)
 	h.mu.Lock()
-	h.sessions[token] = expiresAt
+	h.sessions[token] = sessionData{
+		Login:     user.Login,
+		Role:      user.Role,
+		ExpiresAt: expiresAt,
+	}
 	h.mu.Unlock()
 
 	http.SetCookie(w, &http.Cookie{
@@ -111,8 +189,16 @@ func (h *AuthHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	})
 
+	redirectPath := "/entrance"
+	if user.Role == roleAdmin {
+		redirectPath = "/admin"
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"role":         user.Role,
+		"redirectPath": redirectPath,
+	})
 }
 
 func (h *AuthHandler) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -141,25 +227,25 @@ func (h *AuthHandler) handleLogout(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
 }
 
-func (h *AuthHandler) isAuthorized(r *http.Request) bool {
+func (h *AuthHandler) sessionFromRequest(r *http.Request) (sessionData, bool) {
 	cookie, err := r.Cookie(sessionCookieName)
 	if err != nil || strings.TrimSpace(cookie.Value) == "" {
-		return false
+		return sessionData{}, false
 	}
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	expiresAt, ok := h.sessions[cookie.Value]
+	session, ok := h.sessions[cookie.Value]
 	if !ok {
-		return false
+		return sessionData{}, false
 	}
-	if time.Now().After(expiresAt) {
+	if time.Now().After(session.ExpiresAt) {
 		delete(h.sessions, cookie.Value)
-		return false
+		return sessionData{}, false
 	}
 
-	return true
+	return session, true
 }
 
 func generateSessionToken() (string, error) {

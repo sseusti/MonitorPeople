@@ -31,8 +31,13 @@ func main() {
 
 	adminLogin := envOrDefault("ADMIN_LOGIN", "admin")
 	adminPassword := envOrDefault("ADMIN_PASSWORD", "admin123")
-	if err := postgres.EnsureAdminUser(db, adminLogin, adminPassword); err != nil {
+	entranceLogin := envOrDefault("ENTRANCE_LOGIN", "entrance")
+	entrancePassword := envOrDefault("ENTRANCE_PASSWORD", "entrance123")
+	if err := postgres.EnsureAuthUser(db, adminLogin, adminPassword, "admin"); err != nil {
 		log.Fatalf("ensure admin user: %v", err)
+	}
+	if err := postgres.EnsureAuthUser(db, entranceLogin, entrancePassword, "entrance"); err != nil {
+		log.Fatalf("ensure entrance user: %v", err)
 	}
 
 	repo := postgres.NewPeopleRepository(db)
@@ -42,14 +47,21 @@ func main() {
 	authService := auth.NewService(authRepo)
 	authHandler := httpapi.NewAuthHandler(authService)
 
-	protectedMux := http.NewServeMux()
-	handler.RegisterRoutes(protectedMux)
-	protectedMux.Handle("/", http.FileServer(http.Dir("web")))
-
 	mux := http.NewServeMux()
 	authHandler.RegisterPublicRoutes(mux)
-	mux.Handle("/login.js", http.FileServer(http.Dir("web")))
-	mux.Handle("/", authHandler.RequireAuth(protectedMux))
+	fileServer := http.FileServer(http.Dir("web"))
+	mux.Handle("/styles.css", fileServer)
+	mux.Handle("/login.js", fileServer)
+	mux.Handle("/admin.js", fileServer)
+	mux.Handle("/entrance.js", fileServer)
+
+	mux.Handle("/", authHandler.RequireAuth(http.HandlerFunc(authHandler.HandleHome)))
+	mux.Handle("/admin", authHandler.RequireAuth(http.HandlerFunc(authHandler.HandleAdminPage)))
+	mux.Handle("/entrance", authHandler.RequireAuth(http.HandlerFunc(authHandler.HandleEntrancePage)))
+
+	mux.Handle("/people/check-in", authHandler.RequireAuth(http.HandlerFunc(handler.CheckInHandler())))
+	mux.Handle("/people", authHandler.RequireAdmin(http.HandlerFunc(handler.CreatePersonHandler())))
+	mux.Handle("/people/delete", authHandler.RequireAdmin(http.HandlerFunc(handler.DeletePersonHandler())))
 
 	log.Println("server started on :8080")
 	if err := http.ListenAndServe(":8080", mux); err != nil {

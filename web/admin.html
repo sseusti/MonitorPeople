@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Админка</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <div class="header-row">
+        <h1>Админка гостей</h1>
+        <button id="logout-btn" type="button" class="ghost-btn">Выйти</button>
+      </div>
+      <p class="subtitle">Добавление, проверка и удаление гостей</p>
+
+      <form id="guest-form" class="card">
+        <label>
+          Имя
+          <input id="name" name="name" type="text" required />
+        </label>
+
+        <label>
+          Фамилия
+          <input id="surname" name="surname" type="text" required />
+        </label>
+
+        <label>
+          Направление обучения
+          <input id="studyDirection" name="studyDirection" type="text" required />
+        </label>
+
+        <label class="checkbox">
+          <input id="visitedEvent" name="visitedEvent" type="checkbox" />
+          Уже отметил проход
+        </label>
+
+        <div class="actions">
+          <button id="add-btn" type="button">Добавить</button>
+          <button id="check-btn" type="button">Проверить</button>
+          <button id="delete-btn" type="button" class="danger-btn">Удалить</button>
+        </div>
+      </form>
+    </main>
+
+    <div id="toast-root" class="toast-root"></div>
+    <script src="/admin.js" defer></script>
+  </body>
+</html>

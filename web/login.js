@@ -41,7 +41,8 @@ async function login() {
             showToast(localizeError(text));
             return;
         }
-        window.location.href = "/";
+        const payload = await response.json();
+        window.location.href = payload.redirectPath ?? "/";
     }
     catch {
         showToast("Сервер недоступен");

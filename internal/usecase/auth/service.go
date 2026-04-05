@@ -11,7 +11,12 @@ var (
 )
 
 type Repository interface {
-	ValidateAdmin(ctx context.Context, login, password string) (bool, error)
+	Authenticate(ctx context.Context, login, password string) (User, bool, error)
+}
+
+type User struct {
+	Login string
+	Role  string
 }
 
 type Service struct {
@@ -22,19 +27,19 @@ func NewService(repo Repository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) Login(ctx context.Context, login, password string) error {
+func (s *Service) Login(ctx context.Context, login, password string) (User, error) {
 	login = strings.TrimSpace(login)
 	password = strings.TrimSpace(password)
 	if login == "" || password == "" {
-		return ErrInvalidCredentials
+		return User{}, ErrInvalidCredentials
 	}
 
-	ok, err := s.repo.ValidateAdmin(ctx, login, password)
+	user, ok, err := s.repo.Authenticate(ctx, login, password)
 	if err != nil {
-		return err
+		return User{}, err
 	}
 	if !ok {
-		return ErrInvalidCredentials
+		return User{}, ErrInvalidCredentials
 	}
-	return nil
+	return user, nil
 }
