@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"MonitorPeople/internal/domain"
 	"MonitorPeople/internal/usecase/people"
@@ -129,6 +130,70 @@ func (r *PeopleRepository) DeletePerson(ctx context.Context, name, surname strin
 	}
 
 	return nil
+}
+
+func (r *PeopleRepository) UndoCheckIn(ctx context.Context, name, surname string, within time.Duration) (domain.Person, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return domain.Person{}, err
+	}
+	defer tx.Rollback()
+
+	var person domain.Person
+	selectQuery := `
+		SELECT order_number, name, surname, study_direction, visited_event, check_in_time
+		FROM visitors
+		WHERE name = $1 AND surname = $2
+		ORDER BY order_number
+		LIMIT 1
+		FOR UPDATE
+	`
+
+	err = tx.QueryRowContext(ctx, selectQuery, name, surname).Scan(
+		&person.OrderNumber,
+		&person.Name,
+		&person.Surname,
+		&person.StudyDirection,
+		&person.VisitedEvent,
+		&person.CheckInTime,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.Person{}, people.ErrPersonNotFound
+	}
+	if err != nil {
+		return domain.Person{}, err
+	}
+
+	if !person.VisitedEvent {
+		return domain.Person{}, people.ErrPersonNotVisited
+	}
+	if person.CheckInTime == nil || time.Since(*person.CheckInTime) > within {
+		return domain.Person{}, people.ErrUndoWindowExpired
+	}
+
+	updateQuery := `
+		UPDATE visitors
+		SET visited_event = false, check_in_time = NULL
+		WHERE order_number = $1
+		RETURNING order_number, name, surname, study_direction, visited_event, check_in_time
+	`
+	err = tx.QueryRowContext(ctx, updateQuery, person.OrderNumber).Scan(
+		&person.OrderNumber,
+		&person.Name,
+		&person.Surname,
+		&person.StudyDirection,
+		&person.VisitedEvent,
+		&person.CheckInTime,
+	)
+	if err != nil {
+		return domain.Person{}, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return domain.Person{}, err
+	}
+
+	return person, nil
 }
 
 func (r *PeopleRepository) ListPeople(ctx context.Context, filter domain.PeopleFilter) ([]domain.Person, error) {

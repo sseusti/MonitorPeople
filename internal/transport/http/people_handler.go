@@ -15,6 +15,7 @@ import (
 type PeopleService interface {
 	AddPerson(ctx context.Context, name, surname, studyDirection string, visitedEvent bool) (domain.Person, error)
 	CheckInPerson(ctx context.Context, name, surname string) (domain.Person, error)
+	UndoCheckIn(ctx context.Context, name, surname string) (domain.Person, error)
 	DeletePerson(ctx context.Context, name, surname string) error
 	ListPeople(ctx context.Context, filter domain.PeopleFilter) ([]domain.Person, error)
 	GetVisitedByProgramStats(ctx context.Context, filter domain.PeopleFilter) ([]domain.ProgramStat, error)
@@ -51,6 +52,10 @@ func (h *PeopleHandler) CheckInHandler() http.HandlerFunc {
 
 func (h *PeopleHandler) DeletePersonHandler() http.HandlerFunc {
 	return h.handleDeletePerson
+}
+
+func (h *PeopleHandler) UndoCheckInHandler() http.HandlerFunc {
+	return h.handleUndoCheckIn
 }
 
 func (h *PeopleHandler) ListPeopleHandler() http.HandlerFunc {
@@ -158,6 +163,39 @@ func (h *PeopleHandler) handleDeletePerson(w http.ResponseWriter, r *http.Reques
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+}
+
+func (h *PeopleHandler) handleUndoCheckIn(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req checkInRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json body", http.StatusBadRequest)
+		return
+	}
+
+	person, err := h.service.UndoCheckIn(r.Context(), req.Name, req.Surname)
+	if err != nil {
+		switch {
+		case errors.Is(err, people.ErrValidation):
+			http.Error(w, "name and surname are required", http.StatusBadRequest)
+		case errors.Is(err, people.ErrPersonNotFound):
+			http.Error(w, "person not found", http.StatusNotFound)
+		case errors.Is(err, people.ErrPersonNotVisited):
+			http.Error(w, "person is not checked in", http.StatusConflict)
+		case errors.Is(err, people.ErrUndoWindowExpired):
+			http.Error(w, "undo window expired", http.StatusConflict)
+		default:
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(person)
 }
 
 func (h *PeopleHandler) handleListPeople(w http.ResponseWriter, r *http.Request) {

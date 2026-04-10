@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"MonitorPeople/internal/domain"
 )
@@ -13,8 +14,10 @@ var (
 	ErrPersonNotFound      = errors.New("person not found")
 	ErrPersonAlreadyPassed = errors.New("such person already passed")
 	ErrPersonAlreadyExists = errors.New("person already exists")
+	ErrPersonNotVisited    = errors.New("person is not checked in")
 	ErrInvalidProgram      = errors.New("invalid study direction")
 	ErrInvalidSuggestField = errors.New("invalid suggest field")
+	ErrUndoWindowExpired   = errors.New("undo window expired")
 )
 
 var allowedPrograms = map[string]struct{}{
@@ -27,6 +30,7 @@ var allowedPrograms = map[string]struct{}{
 type Repository interface {
 	AddPerson(ctx context.Context, name, surname, studyDirection string, visitedEvent bool) (domain.Person, error)
 	MarkPersonAsVisited(ctx context.Context, name, surname string) (domain.Person, error)
+	UndoCheckIn(ctx context.Context, name, surname string, within time.Duration) (domain.Person, error)
 	DeletePerson(ctx context.Context, name, surname string) error
 	ListPeople(ctx context.Context, filter domain.PeopleFilter) ([]domain.Person, error)
 	GetVisitedByProgramStats(ctx context.Context, filter domain.PeopleFilter) ([]domain.ProgramStat, error)
@@ -73,6 +77,16 @@ func (s *Service) DeletePerson(ctx context.Context, name, surname string) error 
 	}
 
 	return s.repo.DeletePerson(ctx, name, surname)
+}
+
+func (s *Service) UndoCheckIn(ctx context.Context, name, surname string) (domain.Person, error) {
+	name = strings.TrimSpace(name)
+	surname = strings.TrimSpace(surname)
+	if name == "" || surname == "" {
+		return domain.Person{}, ErrValidation
+	}
+
+	return s.repo.UndoCheckIn(ctx, name, surname, time.Minute)
 }
 
 func (s *Service) ListPeople(ctx context.Context, filter domain.PeopleFilter) ([]domain.Person, error) {
