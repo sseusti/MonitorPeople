@@ -8,9 +8,13 @@ type ToastType = "ok" | "error";
 const form = document.getElementById("check-form") as HTMLFormElement;
 const nameInput = document.getElementById("name") as HTMLInputElement;
 const surnameInput = document.getElementById("surname") as HTMLInputElement;
+const nameSuggestions = document.getElementById("name-suggestions") as HTMLDataListElement;
+const surnameSuggestions = document.getElementById("surname-suggestions") as HTMLDataListElement;
 const checkButton = document.getElementById("check-btn") as HTMLButtonElement;
 const logoutButton = document.getElementById("logout-btn") as HTMLButtonElement;
 const toastRoot = document.getElementById("toast-root") as HTMLDivElement;
+let nameSuggestTimer: number | undefined;
+let surnameSuggestTimer: number | undefined;
 
 function showToast(message: string, type: ToastType): void {
   const toast = document.createElement("div");
@@ -55,6 +59,61 @@ async function parseResponse<T>(response: Response): Promise<T> {
   throw new Error(localizeError(errorText || "Request failed"));
 }
 
+async function fetchSuggestions(field: "name" | "surname", query: string): Promise<string[]> {
+  const response = await fetch(`/people/suggest?field=${field}&q=${encodeURIComponent(query)}`);
+  if (!response.ok) {
+    return [];
+  }
+  return (await response.json()) as string[];
+}
+
+function renderSuggestions(datalist: HTMLDataListElement, values: string[]): void {
+  datalist.innerHTML = "";
+  for (const value of values) {
+    const option = document.createElement("option");
+    option.value = value;
+    datalist.appendChild(option);
+  }
+}
+
+function clearNameAndSurnameFields(): void {
+  nameInput.value = "";
+  surnameInput.value = "";
+  renderSuggestions(nameSuggestions, []);
+  renderSuggestions(surnameSuggestions, []);
+  nameInput.focus();
+}
+
+function scheduleNameSuggestions(): void {
+  if (nameSuggestTimer !== undefined) {
+    window.clearTimeout(nameSuggestTimer);
+  }
+  nameSuggestTimer = window.setTimeout(async () => {
+    const query = nameInput.value.trim();
+    if (query.length < 1) {
+      renderSuggestions(nameSuggestions, []);
+      return;
+    }
+    const values = await fetchSuggestions("name", query);
+    renderSuggestions(nameSuggestions, values);
+  }, 220);
+}
+
+function scheduleSurnameSuggestions(): void {
+  if (surnameSuggestTimer !== undefined) {
+    window.clearTimeout(surnameSuggestTimer);
+  }
+  surnameSuggestTimer = window.setTimeout(async () => {
+    const query = surnameInput.value.trim();
+    if (query.length < 1) {
+      renderSuggestions(surnameSuggestions, []);
+      return;
+    }
+    const values = await fetchSuggestions("surname", query);
+    renderSuggestions(surnameSuggestions, values);
+  }, 220);
+}
+
 async function checkGuest(): Promise<void> {
   const payload = readRequiredNames();
   if (!payload) return;
@@ -69,6 +128,7 @@ async function checkGuest(): Promise<void> {
       }),
     );
     showToast(`${person.name} ${person.surname} успешно отмечен`, "ok");
+    clearNameAndSurnameFields();
   } catch (error) {
     showToast((error as Error).message, "error");
   } finally {
@@ -96,4 +156,12 @@ logoutButton.addEventListener("click", () => {
 form.addEventListener("submit", (event) => {
   event.preventDefault();
   checkGuest();
+});
+
+nameInput.addEventListener("input", () => {
+  scheduleNameSuggestions();
+});
+
+surnameInput.addEventListener("input", () => {
+  scheduleSurnameSuggestions();
 });

@@ -18,6 +18,7 @@ func NewRouter(authHandler *AuthHandler, peopleHandler *PeopleHandler) http.Hand
 	mux.Handle("/entrance", authHandler.RequireAuth(http.HandlerFunc(authHandler.HandleEntrancePage)))
 
 	mux.Handle("/people/check-in", authHandler.RequireAuth(http.HandlerFunc(peopleHandler.CheckInHandler())))
+	mux.Handle("/people/suggest", authHandler.RequireAuth(http.HandlerFunc(peopleHandler.SuggestValuesHandler())))
 	mux.Handle("/people", authHandler.RequireAdmin(http.HandlerFunc(peopleHandler.CreatePersonHandler())))
 	mux.Handle("/people/delete", authHandler.RequireAdmin(http.HandlerFunc(peopleHandler.DeletePersonHandler())))
 	mux.Handle("/people/list", authHandler.RequireAdmin(http.HandlerFunc(peopleHandler.ListPeopleHandler())))

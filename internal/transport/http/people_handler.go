@@ -18,6 +18,7 @@ type PeopleService interface {
 	DeletePerson(ctx context.Context, name, surname string) error
 	ListPeople(ctx context.Context, filter domain.PeopleFilter) ([]domain.Person, error)
 	GetVisitedByProgramStats(ctx context.Context, filter domain.PeopleFilter) ([]domain.ProgramStat, error)
+	SuggestFieldValues(ctx context.Context, field, query string) ([]string, error)
 }
 
 type PeopleHandler struct {
@@ -58,6 +59,10 @@ func (h *PeopleHandler) ListPeopleHandler() http.HandlerFunc {
 
 func (h *PeopleHandler) ProgramStatsHandler() http.HandlerFunc {
 	return h.handleProgramStats
+}
+
+func (h *PeopleHandler) SuggestValuesHandler() http.HandlerFunc {
+	return h.handleSuggestValues
 }
 
 func (h *PeopleHandler) handleCreatePerson(w http.ResponseWriter, r *http.Request) {
@@ -205,6 +210,28 @@ func (h *PeopleHandler) handleProgramStats(w http.ResponseWriter, r *http.Reques
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(stats)
+}
+
+func (h *PeopleHandler) handleSuggestValues(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	field := strings.TrimSpace(r.URL.Query().Get("field"))
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	values, err := h.service.SuggestFieldValues(r.Context(), field, query)
+	if err != nil {
+		if errors.Is(err, people.ErrInvalidSuggestField) {
+			http.Error(w, "invalid suggest field", http.StatusBadRequest)
+			return
+		}
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(values)
 }
 
 func filterFromQuery(r *http.Request) (domain.PeopleFilter, error) {

@@ -225,6 +225,46 @@ func buildVisitorsFilter(filter domain.PeopleFilter) (string, []any) {
 	return strings.Join(parts, " AND "), args
 }
 
+func (r *PeopleRepository) SuggestFieldValues(ctx context.Context, field, query string, limit int) ([]string, error) {
+	column := ""
+	switch field {
+	case "name":
+		column = "name"
+	case "surname":
+		column = "surname"
+	default:
+		return nil, people.ErrInvalidSuggestField
+	}
+
+	sqlQuery := fmt.Sprintf(`
+		SELECT DISTINCT %s
+		FROM visitors
+		WHERE %s ILIKE $1
+		ORDER BY %s
+		LIMIT $2
+	`, column, column, column)
+
+	rows, err := r.db.QueryContext(ctx, sqlQuery, "%"+query+"%", limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	values := make([]string, 0, limit)
+	for rows.Next() {
+		var value string
+		if err := rows.Scan(&value); err != nil {
+			return nil, err
+		}
+		values = append(values, value)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return values, nil
+}
+
 func InitSchema(db *sql.DB) error {
 	visitorsQuery := `
 		CREATE TABLE IF NOT EXISTS visitors (

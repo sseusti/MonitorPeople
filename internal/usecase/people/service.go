@@ -14,6 +14,7 @@ var (
 	ErrPersonAlreadyPassed = errors.New("such person already passed")
 	ErrPersonAlreadyExists = errors.New("person already exists")
 	ErrInvalidProgram      = errors.New("invalid study direction")
+	ErrInvalidSuggestField = errors.New("invalid suggest field")
 )
 
 var allowedPrograms = map[string]struct{}{
@@ -29,6 +30,7 @@ type Repository interface {
 	DeletePerson(ctx context.Context, name, surname string) error
 	ListPeople(ctx context.Context, filter domain.PeopleFilter) ([]domain.Person, error)
 	GetVisitedByProgramStats(ctx context.Context, filter domain.PeopleFilter) ([]domain.ProgramStat, error)
+	SuggestFieldValues(ctx context.Context, field, query string, limit int) ([]string, error)
 }
 
 type Service struct {
@@ -92,4 +94,17 @@ func (s *Service) GetVisitedByProgramStats(ctx context.Context, filter domain.Pe
 func isAllowedProgram(program string) bool {
 	_, ok := allowedPrograms[program]
 	return ok
+}
+
+func (s *Service) SuggestFieldValues(ctx context.Context, field, query string) ([]string, error) {
+	field = strings.TrimSpace(field)
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return []string{}, nil
+	}
+	if field != "name" && field != "surname" {
+		return nil, ErrInvalidSuggestField
+	}
+
+	return s.repo.SuggestFieldValues(ctx, field, query, 10)
 }

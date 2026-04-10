@@ -17,6 +17,8 @@ type ToastType = "ok" | "error";
 const form = document.getElementById("guest-form") as HTMLFormElement;
 const nameInput = document.getElementById("name") as HTMLInputElement;
 const surnameInput = document.getElementById("surname") as HTMLInputElement;
+const nameSuggestions = document.getElementById("name-suggestions") as HTMLDataListElement;
+const surnameSuggestions = document.getElementById("surname-suggestions") as HTMLDataListElement;
 const studyDirectionInput = document.getElementById("studyDirection") as HTMLSelectElement;
 const visitedInput = document.getElementById("visitedEvent") as HTMLInputElement;
 const addButton = document.getElementById("add-btn") as HTMLButtonElement;
@@ -29,6 +31,8 @@ const filterStudyDirection = document.getElementById("filter-studyDirection") as
 const programStatsList = document.getElementById("program-stats-list") as HTMLUListElement;
 const guestsTbody = document.getElementById("guests-tbody") as HTMLTableSectionElement;
 const toastRoot = document.getElementById("toast-root") as HTMLDivElement;
+let nameSuggestTimer: number | undefined;
+let surnameSuggestTimer: number | undefined;
 
 function showToast(message: string, type: ToastType): void {
   const toast = document.createElement("div");
@@ -80,6 +84,61 @@ function setBusy(isBusy: boolean): void {
   addButton.disabled = isBusy;
   checkButton.disabled = isBusy;
   deleteButton.disabled = isBusy;
+}
+
+async function fetchSuggestions(field: "name" | "surname", query: string): Promise<string[]> {
+  const response = await fetch(`/people/suggest?field=${field}&q=${encodeURIComponent(query)}`);
+  if (!response.ok) {
+    return [];
+  }
+  return (await response.json()) as string[];
+}
+
+function renderSuggestions(datalist: HTMLDataListElement, values: string[]): void {
+  datalist.innerHTML = "";
+  for (const value of values) {
+    const option = document.createElement("option");
+    option.value = value;
+    datalist.appendChild(option);
+  }
+}
+
+function clearNameAndSurnameFields(): void {
+  nameInput.value = "";
+  surnameInput.value = "";
+  renderSuggestions(nameSuggestions, []);
+  renderSuggestions(surnameSuggestions, []);
+  nameInput.focus();
+}
+
+function scheduleNameSuggestions(): void {
+  if (nameSuggestTimer !== undefined) {
+    window.clearTimeout(nameSuggestTimer);
+  }
+  nameSuggestTimer = window.setTimeout(async () => {
+    const query = nameInput.value.trim();
+    if (query.length < 1) {
+      renderSuggestions(nameSuggestions, []);
+      return;
+    }
+    const values = await fetchSuggestions("name", query);
+    renderSuggestions(nameSuggestions, values);
+  }, 220);
+}
+
+function scheduleSurnameSuggestions(): void {
+  if (surnameSuggestTimer !== undefined) {
+    window.clearTimeout(surnameSuggestTimer);
+  }
+  surnameSuggestTimer = window.setTimeout(async () => {
+    const query = surnameInput.value.trim();
+    if (query.length < 1) {
+      renderSuggestions(surnameSuggestions, []);
+      return;
+    }
+    const values = await fetchSuggestions("surname", query);
+    renderSuggestions(surnameSuggestions, values);
+  }, 220);
 }
 
 function getFilterQuery(): string {
@@ -203,6 +262,7 @@ async function checkGuest(): Promise<void> {
       }),
     );
     showToast(`${person.name} ${person.surname} успешно отмечен`, "ok");
+    clearNameAndSurnameFields();
     await refreshStatistics();
   } catch (error) {
     showToast((error as Error).message, "error");
@@ -268,6 +328,14 @@ filterVisited.addEventListener("change", () => {
 
 filterStudyDirection.addEventListener("input", () => {
   refreshStatistics();
+});
+
+nameInput.addEventListener("input", () => {
+  scheduleNameSuggestions();
+});
+
+surnameInput.addEventListener("input", () => {
+  scheduleSurnameSuggestions();
 });
 
 form.addEventListener("submit", (event) => {
