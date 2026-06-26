@@ -23,6 +23,8 @@ const logoutButton = document.getElementById("logout-btn") as HTMLButtonElement;
 const toastRoot = document.getElementById("toast-root") as HTMLDivElement;
 let nameSuggestTimer: number | undefined;
 let surnameSuggestTimer: number | undefined;
+let nameSuggestRequestId = 0;
+let surnameSuggestRequestId = 0;
 const undoWindowMs = 60_000;
 const recentCheckins: RecentCheckIn[] = [];
 
@@ -102,7 +104,8 @@ async function parseResponse<T>(response: Response): Promise<T> {
 }
 
 async function fetchSuggestions(field: "name" | "surname", query: string): Promise<string[]> {
-  const response = await fetch(`/people/suggest?field=${field}&q=${encodeURIComponent(query)}`);
+  const params = new URLSearchParams({ field, q: query });
+  const response = await fetch(`/people/suggest?${params.toString()}`);
   if (!response.ok) {
     return [];
   }
@@ -129,7 +132,7 @@ function clearNameAndSurnameFields(): void {
 function pruneRecentCheckins(): void {
   const now = Date.now();
   for (let i = recentCheckins.length - 1; i >= 0; i--) {
-    if (now-recentCheckins[i].checkedAtMs > undoWindowMs) {
+    if (now - recentCheckins[i].checkedAtMs > undoWindowMs) {
       recentCheckins.splice(i, 1);
     }
   }
@@ -228,7 +231,11 @@ function scheduleNameSuggestions(): void {
       renderSuggestions(nameSuggestions, []);
       return;
     }
+    const requestId = ++nameSuggestRequestId;
     const values = await fetchSuggestions("name", query);
+    if (requestId !== nameSuggestRequestId || query !== nameInput.value.trim()) {
+      return;
+    }
     renderSuggestions(nameSuggestions, values);
   }, 220);
 }
@@ -243,7 +250,11 @@ function scheduleSurnameSuggestions(): void {
       renderSuggestions(surnameSuggestions, []);
       return;
     }
+    const requestId = ++surnameSuggestRequestId;
     const values = await fetchSuggestions("surname", query);
+    if (requestId !== surnameSuggestRequestId || query !== surnameInput.value.trim()) {
+      return;
+    }
     renderSuggestions(surnameSuggestions, values);
   }, 220);
 }

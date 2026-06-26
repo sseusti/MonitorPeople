@@ -28,14 +28,10 @@
         <datalist id="surname-suggestions"></datalist>
 
         <label>
-          Направление обучения
-          <select id="studyDirection" name="studyDirection" required>
-            <option value="КНТ">КНТ</option>
-            <option value="МББЭ">МББЭ</option>
-            <option value="ЦМ">ЦМ</option>
-            <option value="Ю">Ю</option>
-          </select>
+          Образовательная программа
+          <input id="studyDirection" name="studyDirection" type="text" list="program-suggestions" required />
         </label>
+        <datalist id="program-suggestions"></datalist>
 
         <label class="checkbox">
           <input id="visitedEvent" name="visitedEvent" type="checkbox" />
@@ -48,6 +44,30 @@
           <button id="delete-btn" type="button" class="danger-btn">Удалить</button>
         </div>
       </form>
+
+      <section class="card">
+        <div class="section-head">
+          <h2>Импорт списков</h2>
+        </div>
+
+        <div class="import-grid">
+          <label>
+            Выпускники (.xls/.xlsx)
+            <input id="students-file" type="file" accept=".xls,.xlsx" />
+          </label>
+          <button id="import-students-btn" type="button">Загрузить выпускников</button>
+
+          <label>
+            Преподаватели (.xls/.xlsx)
+            <input id="teachers-file" type="file" accept=".xls,.xlsx" />
+          </label>
+          <button id="import-teachers-btn" type="button">Загрузить преподавателей</button>
+        </div>
+
+        <div class="danger-zone">
+          <button id="delete-students-btn" type="button" class="danger-btn">Удалить всех студентов</button>
+        </div>
+      </section>
 
       <section class="card">
         <div class="section-head">
@@ -66,14 +86,13 @@
           </label>
 
           <label>
-            Направление
-            <select id="filter-studyDirection">
-              <option value="">Все направления</option>
-              <option value="КНТ">КНТ</option>
-              <option value="МББЭ">МББЭ</option>
-              <option value="ЦМ">ЦМ</option>
-              <option value="Ю">Ю</option>
-            </select>
+            Образовательная программа
+            <input
+              id="filter-studyDirection"
+              type="text"
+              list="program-suggestions"
+              placeholder="Все программы"
+            />
           </label>
         </div>
 

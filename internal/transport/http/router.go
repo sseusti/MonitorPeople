@@ -22,6 +22,9 @@ func NewRouter(authHandler *AuthHandler, peopleHandler *PeopleHandler) http.Hand
 	mux.Handle("/people/suggest", authHandler.RequireAuth(http.HandlerFunc(peopleHandler.SuggestValuesHandler())))
 	mux.Handle("/people", authHandler.RequireAdmin(http.HandlerFunc(peopleHandler.CreatePersonHandler())))
 	mux.Handle("/people/delete", authHandler.RequireAdmin(http.HandlerFunc(peopleHandler.DeletePersonHandler())))
+	mux.Handle("/people/students/delete-all", authHandler.RequireAdmin(http.HandlerFunc(peopleHandler.DeleteStudentsHandler())))
+	mux.Handle("/people/import/students", authHandler.RequireAdmin(http.HandlerFunc(peopleHandler.ImportStudentsHandler())))
+	mux.Handle("/people/import/teachers", authHandler.RequireAdmin(http.HandlerFunc(peopleHandler.ImportTeachersHandler())))
 	mux.Handle("/people/list", authHandler.RequireAdmin(http.HandlerFunc(peopleHandler.ListPeopleHandler())))
 	mux.Handle("/people/stats/programs", authHandler.RequireAdmin(http.HandlerFunc(peopleHandler.ProgramStatsHandler())))
 

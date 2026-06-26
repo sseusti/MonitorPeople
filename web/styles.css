@@ -14,16 +14,24 @@
   box-sizing: border-box;
 }
 
+html {
+  width: 100%;
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
+  width: 100%;
+  overflow-x: hidden;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: var(--text);
   background: var(--bg);
 }
 
 .container {
-  width: min(680px, 100% - 24px);
+  width: min(680px, calc(100% - 24px));
   margin: 32px auto;
+  min-width: 0;
 }
 
 h1 {
@@ -36,6 +44,7 @@ h1 {
   justify-content: space-between;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 
 .subtitle {
@@ -50,6 +59,7 @@ h1 {
   padding: 16px;
   display: grid;
   gap: 12px;
+  min-width: 0;
 }
 
 label {
@@ -58,16 +68,23 @@ label {
   font-size: 14px;
 }
 
-input[type="text"] {
+input[type="text"],
+input[type="file"] {
   width: 100%;
+  min-width: 0;
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px 12px;
   font-size: 15px;
 }
 
+input[type="file"] {
+  background: #fff;
+}
+
 select {
   width: 100%;
+  min-width: 0;
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px 12px;
@@ -92,6 +109,7 @@ select {
 }
 
 button {
+  min-width: 0;
   border: 0;
   border-radius: 8px;
   padding: 10px 12px;
@@ -121,6 +139,7 @@ button:disabled {
   justify-content: space-between;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 
 h2 {
@@ -143,6 +162,20 @@ h3 {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+.import-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.danger-zone {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .stats-block {
@@ -215,9 +248,13 @@ h3 {
 }
 
 .table-wrap {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: 10px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .guests-table {
@@ -285,12 +322,26 @@ h3 {
     margin: 20px auto;
   }
 
+  .header-row,
+  .section-head {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
   .actions {
     grid-template-columns: 1fr;
   }
 
   .filters {
     grid-template-columns: 1fr;
+  }
+
+  .import-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .danger-zone {
+    display: grid;
   }
 
   .recent-checkins-list li {

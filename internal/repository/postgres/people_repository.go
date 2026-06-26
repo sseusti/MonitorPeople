@@ -60,7 +60,7 @@ func (r *PeopleRepository) MarkPersonAsVisited(ctx context.Context, name, surnam
 	selectQuery := `
 		SELECT order_number, name, surname, study_direction, visited_event, check_in_time
 		FROM visitors
-		WHERE name = $1 AND surname = $2
+		WHERE name = $1 AND surname = $2 AND visited_event = false
 		ORDER BY order_number
 		LIMIT 1
 		FOR UPDATE
@@ -75,14 +75,17 @@ func (r *PeopleRepository) MarkPersonAsVisited(ctx context.Context, name, surnam
 		&person.CheckInTime,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
+		exists, existsErr := r.personExists(ctx, tx, name, surname)
+		if existsErr != nil {
+			return domain.Person{}, existsErr
+		}
+		if exists {
+			return domain.Person{}, people.ErrPersonAlreadyPassed
+		}
 		return domain.Person{}, people.ErrPersonNotFound
 	}
 	if err != nil {
 		return domain.Person{}, err
-	}
-
-	if person.VisitedEvent {
-		return domain.Person{}, people.ErrPersonAlreadyPassed
 	}
 
 	updateQuery := `
@@ -110,6 +113,18 @@ func (r *PeopleRepository) MarkPersonAsVisited(ctx context.Context, name, surnam
 	return person, nil
 }
 
+func (r *PeopleRepository) personExists(ctx context.Context, tx *sql.Tx, name, surname string) (bool, error) {
+	const query = `
+		SELECT EXISTS(
+			SELECT 1 FROM visitors WHERE name = $1 AND surname = $2
+		)
+	`
+
+	var exists bool
+	err := tx.QueryRowContext(ctx, query, name, surname).Scan(&exists)
+	return exists, err
+}
+
 func (r *PeopleRepository) DeletePerson(ctx context.Context, name, surname string) error {
 	const query = `
 		DELETE FROM visitors
@@ -130,6 +145,20 @@ func (r *PeopleRepository) DeletePerson(ctx context.Context, name, surname strin
 	}
 
 	return nil
+}
+
+func (r *PeopleRepository) DeleteStudents(ctx context.Context) (int64, error) {
+	const query = `
+		DELETE FROM visitors
+		WHERE study_direction <> $1
+	`
+
+	result, err := r.db.ExecContext(ctx, query, domain.TeacherStudyDirection)
+	if err != nil {
+		return 0, err
+	}
+
+	return result.RowsAffected()
 }
 
 func (r *PeopleRepository) UndoCheckIn(ctx context.Context, name, surname string, within time.Duration) (domain.Person, error) {
@@ -297,6 +326,8 @@ func (r *PeopleRepository) SuggestFieldValues(ctx context.Context, field, query 
 		column = "name"
 	case "surname":
 		column = "surname"
+	case "studyDirection":
+		column = "study_direction"
 	default:
 		return nil, people.ErrInvalidSuggestField
 	}
@@ -338,11 +369,15 @@ func InitSchema(db *sql.DB) error {
 			surname TEXT NOT NULL,
 			study_direction TEXT NOT NULL,
 			visited_event BOOLEAN NOT NULL DEFAULT FALSE,
-			check_in_time TIMESTAMPTZ NULL,
-			CONSTRAINT visitors_name_surname_unique UNIQUE (name, surname)
+			check_in_time TIMESTAMPTZ NULL
 		)
 	`
 	_, err := db.Exec(visitorsQuery)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Exec("ALTER TABLE visitors DROP CONSTRAINT IF EXISTS visitors_name_surname_unique")
 	if err != nil {
 		return err
 	}

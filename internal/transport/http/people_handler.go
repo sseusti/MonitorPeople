@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -14,9 +15,11 @@ import (
 
 type PeopleService interface {
 	AddPerson(ctx context.Context, name, surname, studyDirection string, visitedEvent bool) (domain.Person, error)
+	ImportPeople(ctx context.Context, drafts []domain.PersonDraft) (domain.ImportResult, error)
 	CheckInPerson(ctx context.Context, name, surname string) (domain.Person, error)
 	UndoCheckIn(ctx context.Context, name, surname string) (domain.Person, error)
 	DeletePerson(ctx context.Context, name, surname string) error
+	DeleteStudents(ctx context.Context) (int64, error)
 	ListPeople(ctx context.Context, filter domain.PeopleFilter) ([]domain.Person, error)
 	GetVisitedByProgramStats(ctx context.Context, filter domain.PeopleFilter) ([]domain.ProgramStat, error)
 	SuggestFieldValues(ctx context.Context, field, query string) ([]string, error)
@@ -54,6 +57,10 @@ func (h *PeopleHandler) DeletePersonHandler() http.HandlerFunc {
 	return h.handleDeletePerson
 }
 
+func (h *PeopleHandler) DeleteStudentsHandler() http.HandlerFunc {
+	return h.handleDeleteStudents
+}
+
 func (h *PeopleHandler) UndoCheckInHandler() http.HandlerFunc {
 	return h.handleUndoCheckIn
 }
@@ -68,6 +75,14 @@ func (h *PeopleHandler) ProgramStatsHandler() http.HandlerFunc {
 
 func (h *PeopleHandler) SuggestValuesHandler() http.HandlerFunc {
 	return h.handleSuggestValues
+}
+
+func (h *PeopleHandler) ImportStudentsHandler() http.HandlerFunc {
+	return h.handleImportStudents
+}
+
+func (h *PeopleHandler) ImportTeachersHandler() http.HandlerFunc {
+	return h.handleImportTeachers
 }
 
 func (h *PeopleHandler) handleCreatePerson(w http.ResponseWriter, r *http.Request) {
@@ -163,6 +178,22 @@ func (h *PeopleHandler) handleDeletePerson(w http.ResponseWriter, r *http.Reques
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+}
+
+func (h *PeopleHandler) handleDeleteStudents(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	deleted, err := h.service.DeleteStudents(r.Context())
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]int64{"deleted": deleted})
 }
 
 func (h *PeopleHandler) handleUndoCheckIn(w http.ResponseWriter, r *http.Request) {
@@ -270,6 +301,63 @@ func (h *PeopleHandler) handleSuggestValues(w http.ResponseWriter, r *http.Reque
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(values)
+}
+
+func (h *PeopleHandler) handleImportStudents(w http.ResponseWriter, r *http.Request) {
+	h.handleImport(w, r, parseStudentsImport)
+}
+
+func (h *PeopleHandler) handleImportTeachers(w http.ResponseWriter, r *http.Request) {
+	h.handleImport(w, r, parseTeachersImport)
+}
+
+func (h *PeopleHandler) handleImport(
+	w http.ResponseWriter,
+	r *http.Request,
+	parse func(fileReader io.Reader, filename string) ([]domain.PersonDraft, error),
+) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if err := r.ParseMultipartForm(12 << 20); err != nil {
+		http.Error(w, "invalid multipart form", http.StatusBadRequest)
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "file is required", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	drafts, err := parse(file, header.Filename)
+	if err != nil {
+		switch {
+		case errors.Is(err, errUnsupportedImportFile):
+			http.Error(w, "unsupported import file type", http.StatusBadRequest)
+		case errors.Is(err, errImportColumnsNotFound):
+			http.Error(w, "required import columns not found", http.StatusBadRequest)
+		default:
+			http.Error(w, "invalid import file", http.StatusBadRequest)
+		}
+		return
+	}
+	if len(drafts) == 0 {
+		http.Error(w, "no valid rows found", http.StatusBadRequest)
+		return
+	}
+
+	result, err := h.service.ImportPeople(r.Context(), drafts)
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(result)
 }
 
 func filterFromQuery(r *http.Request) (domain.PeopleFilter, error) {

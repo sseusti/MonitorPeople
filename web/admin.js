@@ -4,11 +4,17 @@ const nameInput = document.getElementById("name");
 const surnameInput = document.getElementById("surname");
 const nameSuggestions = document.getElementById("name-suggestions");
 const surnameSuggestions = document.getElementById("surname-suggestions");
+const programSuggestions = document.getElementById("program-suggestions");
 const studyDirectionInput = document.getElementById("studyDirection");
 const visitedInput = document.getElementById("visitedEvent");
 const addButton = document.getElementById("add-btn");
 const checkButton = document.getElementById("check-btn");
 const deleteButton = document.getElementById("delete-btn");
+const studentsFileInput = document.getElementById("students-file");
+const teachersFileInput = document.getElementById("teachers-file");
+const importStudentsButton = document.getElementById("import-students-btn");
+const importTeachersButton = document.getElementById("import-teachers-btn");
+const deleteStudentsButton = document.getElementById("delete-students-btn");
 const logoutButton = document.getElementById("logout-btn");
 const refreshStatsButton = document.getElementById("refresh-stats-btn");
 const filterVisited = document.getElementById("filter-visited");
@@ -18,6 +24,12 @@ const guestsTbody = document.getElementById("guests-tbody");
 const toastRoot = document.getElementById("toast-root");
 let nameSuggestTimer;
 let surnameSuggestTimer;
+let programSuggestTimer;
+let filterProgramSuggestTimer;
+let nameSuggestRequestId = 0;
+let surnameSuggestRequestId = 0;
+let programSuggestRequestId = 0;
+let filterProgramSuggestRequestId = 0;
 function showToast(message, type) {
     const toast = document.createElement("div");
     toast.className = `toast ${type}`;
@@ -46,6 +58,13 @@ function localizeError(message) {
         "invalid study direction": "Выбрано некорректное направление",
         "visited must be true, false or all": "Некорректный фильтр посещения",
         "invalid json body": "Некорректные данные запроса",
+        "invalid multipart form": "Некорректная форма загрузки",
+        "file is required": "Выберите файл для загрузки",
+        "unsupported import file type": "Поддерживаются только .xls и .xlsx",
+        "required import columns not found": "Не найдены нужные колонки в файле",
+        "invalid import file": "Не удалось прочитать файл",
+        "no valid rows found": "В файле не найдено строк для импорта",
+        "delete students failed": "Не удалось удалить студентов",
         unauthorized: "Сессия истекла. Войдите снова",
         forbidden: "Нет прав для этого действия",
         "internal server error": "Внутренняя ошибка сервера",
@@ -64,9 +83,13 @@ function setBusy(isBusy) {
     addButton.disabled = isBusy;
     checkButton.disabled = isBusy;
     deleteButton.disabled = isBusy;
+    importStudentsButton.disabled = isBusy;
+    importTeachersButton.disabled = isBusy;
+    deleteStudentsButton.disabled = isBusy;
 }
 async function fetchSuggestions(field, query) {
-    const response = await fetch(`/people/suggest?field=${field}&q=${encodeURIComponent(query)}`);
+    const params = new URLSearchParams({ field, q: query });
+    const response = await fetch(`/people/suggest?${params.toString()}`);
     if (!response.ok) {
         return [];
     }
@@ -97,7 +120,11 @@ function scheduleNameSuggestions() {
             renderSuggestions(nameSuggestions, []);
             return;
         }
+        const requestId = ++nameSuggestRequestId;
         const values = await fetchSuggestions("name", query);
+        if (requestId !== nameSuggestRequestId || query !== nameInput.value.trim()) {
+            return;
+        }
         renderSuggestions(nameSuggestions, values);
     }, 220);
 }
@@ -111,9 +138,39 @@ function scheduleSurnameSuggestions() {
             renderSuggestions(surnameSuggestions, []);
             return;
         }
+        const requestId = ++surnameSuggestRequestId;
         const values = await fetchSuggestions("surname", query);
+        if (requestId !== surnameSuggestRequestId || query !== surnameInput.value.trim()) {
+            return;
+        }
         renderSuggestions(surnameSuggestions, values);
     }, 220);
+}
+function scheduleProgramSuggestions(input, isFilter) {
+    const currentTimer = isFilter ? filterProgramSuggestTimer : programSuggestTimer;
+    if (currentTimer !== undefined) {
+        window.clearTimeout(currentTimer);
+    }
+    const timer = window.setTimeout(async () => {
+        const query = input.value.trim();
+        if (query.length < 1) {
+            renderSuggestions(programSuggestions, []);
+            return;
+        }
+        const requestId = isFilter ? ++filterProgramSuggestRequestId : ++programSuggestRequestId;
+        const values = await fetchSuggestions("studyDirection", query);
+        const latestRequestId = isFilter ? filterProgramSuggestRequestId : programSuggestRequestId;
+        if (requestId !== latestRequestId || query !== input.value.trim()) {
+            return;
+        }
+        renderSuggestions(programSuggestions, values);
+    }, 220);
+    if (isFilter) {
+        filterProgramSuggestTimer = timer;
+    }
+    else {
+        programSuggestTimer = timer;
+    }
 }
 function getFilterQuery() {
     const params = new URLSearchParams();
@@ -258,6 +315,55 @@ async function deleteGuest() {
         setBusy(false);
     }
 }
+async function importPeople(endpoint, fileInput, label) {
+    const file = fileInput.files?.[0];
+    if (!file) {
+        showToast("Выберите файл для загрузки", "error");
+        return;
+    }
+    const formData = new FormData();
+    formData.append("file", file);
+    setBusy(true);
+    try {
+        const result = await parseResponse(await fetch(endpoint, {
+            method: "POST",
+            body: formData,
+        }));
+        fileInput.value = "";
+        let message = `${label}: добавлено ${result.imported}, дубли ${result.skippedDuplicates}, пропущено ${result.skippedInvalid}`;
+        if (result.errors && result.errors.length > 0) {
+            message += `. Первая ошибка: ${result.errors[0]}`;
+        }
+        showToast(message, result.imported > 0 ? "ok" : "error");
+        await refreshStatistics();
+    }
+    catch (error) {
+        showToast(error.message, "error");
+    }
+    finally {
+        setBusy(false);
+    }
+}
+async function deleteAllStudents() {
+    const confirmed = window.confirm("Удалить всех студентов из базы? Преподаватели останутся. Это действие нельзя отменить.");
+    if (!confirmed) {
+        return;
+    }
+    setBusy(true);
+    try {
+        const result = await parseResponse(await fetch("/people/students/delete-all", {
+            method: "POST",
+        }));
+        showToast(`Удалено студентов: ${result.deleted}`, "ok");
+        await refreshStatistics();
+    }
+    catch (error) {
+        showToast(error.message || localizeError("delete students failed"), "error");
+    }
+    finally {
+        setBusy(false);
+    }
+}
 async function logout() {
     logoutButton.disabled = true;
     try {
@@ -276,6 +382,15 @@ checkButton.addEventListener("click", () => {
 deleteButton.addEventListener("click", () => {
     deleteGuest();
 });
+importStudentsButton.addEventListener("click", () => {
+    importPeople("/people/import/students", studentsFileInput, "Выпускники");
+});
+importTeachersButton.addEventListener("click", () => {
+    importPeople("/people/import/teachers", teachersFileInput, "Преподаватели");
+});
+deleteStudentsButton.addEventListener("click", () => {
+    deleteAllStudents();
+});
 logoutButton.addEventListener("click", () => {
     logout();
 });
@@ -286,6 +401,7 @@ filterVisited.addEventListener("change", () => {
     refreshStatistics();
 });
 filterStudyDirection.addEventListener("input", () => {
+    scheduleProgramSuggestions(filterStudyDirection, true);
     refreshStatistics();
 });
 nameInput.addEventListener("input", () => {
@@ -293,6 +409,9 @@ nameInput.addEventListener("input", () => {
 });
 surnameInput.addEventListener("input", () => {
     scheduleSurnameSuggestions();
+});
+studyDirectionInput.addEventListener("input", () => {
+    scheduleProgramSuggestions(studyDirectionInput, false);
 });
 form.addEventListener("submit", (event) => {
     event.preventDefault();

@@ -3,6 +3,7 @@ package people
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,18 +21,12 @@ var (
 	ErrUndoWindowExpired   = errors.New("undo window expired")
 )
 
-var allowedPrograms = map[string]struct{}{
-	"КНТ":  {},
-	"МББЭ": {},
-	"ЦМ":   {},
-	"Ю":    {},
-}
-
 type Repository interface {
 	AddPerson(ctx context.Context, name, surname, studyDirection string, visitedEvent bool) (domain.Person, error)
 	MarkPersonAsVisited(ctx context.Context, name, surname string) (domain.Person, error)
 	UndoCheckIn(ctx context.Context, name, surname string, within time.Duration) (domain.Person, error)
 	DeletePerson(ctx context.Context, name, surname string) error
+	DeleteStudents(ctx context.Context) (int64, error)
 	ListPeople(ctx context.Context, filter domain.PeopleFilter) ([]domain.Person, error)
 	GetVisitedByProgramStats(ctx context.Context, filter domain.PeopleFilter) ([]domain.ProgramStat, error)
 	SuggestFieldValues(ctx context.Context, field, query string, limit int) ([]string, error)
@@ -52,11 +47,43 @@ func (s *Service) AddPerson(ctx context.Context, name, surname, studyDirection s
 	if name == "" || surname == "" || studyDirection == "" {
 		return domain.Person{}, ErrValidation
 	}
-	if !isAllowedProgram(studyDirection) {
-		return domain.Person{}, ErrInvalidProgram
-	}
 
 	return s.repo.AddPerson(ctx, name, surname, studyDirection, visitedEvent)
+}
+
+func (s *Service) ImportPeople(ctx context.Context, drafts []domain.PersonDraft) (domain.ImportResult, error) {
+	result := domain.ImportResult{}
+	for index, draft := range drafts {
+		result.Processed++
+
+		name := strings.TrimSpace(draft.Name)
+		surname := strings.TrimSpace(draft.Surname)
+		studyDirection := strings.TrimSpace(draft.StudyDirection)
+		if name == "" || surname == "" || studyDirection == "" {
+			result.SkippedInvalid++
+			result.Errors = appendImportError(result.Errors, index, "пустые имя, фамилия или образовательная программа")
+			continue
+		}
+
+		_, err := s.repo.AddPerson(ctx, name, surname, studyDirection, false)
+		if err == nil {
+			result.Imported++
+			continue
+		}
+		if errors.Is(err, ErrPersonAlreadyExists) {
+			result.SkippedDuplicates++
+			continue
+		}
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return result, ctxErr
+		}
+
+		result.SkippedInvalid++
+		result.Errors = appendImportError(result.Errors, index, "не удалось добавить запись: "+err.Error())
+		continue
+	}
+
+	return result, nil
 }
 
 func (s *Service) CheckInPerson(ctx context.Context, name, surname string) (domain.Person, error) {
@@ -79,6 +106,10 @@ func (s *Service) DeletePerson(ctx context.Context, name, surname string) error 
 	return s.repo.DeletePerson(ctx, name, surname)
 }
 
+func (s *Service) DeleteStudents(ctx context.Context) (int64, error) {
+	return s.repo.DeleteStudents(ctx)
+}
+
 func (s *Service) UndoCheckIn(ctx context.Context, name, surname string) (domain.Person, error) {
 	name = strings.TrimSpace(name)
 	surname = strings.TrimSpace(surname)
@@ -91,23 +122,12 @@ func (s *Service) UndoCheckIn(ctx context.Context, name, surname string) (domain
 
 func (s *Service) ListPeople(ctx context.Context, filter domain.PeopleFilter) ([]domain.Person, error) {
 	filter.StudyDirection = strings.TrimSpace(filter.StudyDirection)
-	if filter.StudyDirection != "" && !isAllowedProgram(filter.StudyDirection) {
-		return nil, ErrInvalidProgram
-	}
 	return s.repo.ListPeople(ctx, filter)
 }
 
 func (s *Service) GetVisitedByProgramStats(ctx context.Context, filter domain.PeopleFilter) ([]domain.ProgramStat, error) {
 	filter.StudyDirection = strings.TrimSpace(filter.StudyDirection)
-	if filter.StudyDirection != "" && !isAllowedProgram(filter.StudyDirection) {
-		return nil, ErrInvalidProgram
-	}
 	return s.repo.GetVisitedByProgramStats(ctx, filter)
-}
-
-func isAllowedProgram(program string) bool {
-	_, ok := allowedPrograms[program]
-	return ok
 }
 
 func (s *Service) SuggestFieldValues(ctx context.Context, field, query string) ([]string, error) {
@@ -116,9 +136,16 @@ func (s *Service) SuggestFieldValues(ctx context.Context, field, query string) (
 	if query == "" {
 		return []string{}, nil
 	}
-	if field != "name" && field != "surname" {
+	if field != "name" && field != "surname" && field != "studyDirection" {
 		return nil, ErrInvalidSuggestField
 	}
 
 	return s.repo.SuggestFieldValues(ctx, field, query, 10)
+}
+
+func appendImportError(errorsList []string, rowIndex int, message string) []string {
+	if len(errorsList) >= 20 {
+		return errorsList
+	}
+	return append(errorsList, "строка "+strconv.Itoa(rowIndex+1)+": "+message)
 }

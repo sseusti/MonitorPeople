@@ -11,6 +11,8 @@ const logoutButton = document.getElementById("logout-btn");
 const toastRoot = document.getElementById("toast-root");
 let nameSuggestTimer;
 let surnameSuggestTimer;
+let nameSuggestRequestId = 0;
+let surnameSuggestRequestId = 0;
 const undoWindowMs = 60000;
 const recentCheckins = [];
 function ensureRecentCheckinsList() {
@@ -76,7 +78,8 @@ async function parseResponse(response) {
     throw new Error(localizeError(errorText || "Request failed"));
 }
 async function fetchSuggestions(field, query) {
-    const response = await fetch(`/people/suggest?field=${field}&q=${encodeURIComponent(query)}`);
+    const params = new URLSearchParams({ field, q: query });
+    const response = await fetch(`/people/suggest?${params.toString()}`);
     if (!response.ok) {
         return [];
     }
@@ -184,7 +187,11 @@ function scheduleNameSuggestions() {
             renderSuggestions(nameSuggestions, []);
             return;
         }
+        const requestId = ++nameSuggestRequestId;
         const values = await fetchSuggestions("name", query);
+        if (requestId !== nameSuggestRequestId || query !== nameInput.value.trim()) {
+            return;
+        }
         renderSuggestions(nameSuggestions, values);
     }, 220);
 }
@@ -198,7 +205,11 @@ function scheduleSurnameSuggestions() {
             renderSuggestions(surnameSuggestions, []);
             return;
         }
+        const requestId = ++surnameSuggestRequestId;
         const values = await fetchSuggestions("surname", query);
+        if (requestId !== surnameSuggestRequestId || query !== surnameInput.value.trim()) {
+            return;
+        }
         renderSuggestions(surnameSuggestions, values);
     }, 220);
 }
