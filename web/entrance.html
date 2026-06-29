@@ -15,17 +15,17 @@
       <p class="subtitle">Только проверка посещения гостя</p>
 
       <form id="check-form" class="card">
+         <label>
+          Фамилия
+          <input id="surname" name="surname" type="text" list="surname-suggestions" required />
+        </label>
+        <datalist id="surname-suggestions"></datalist>
+        
         <label>
           Имя
           <input id="name" name="name" type="text" list="name-suggestions" required />
         </label>
         <datalist id="name-suggestions"></datalist>
-
-        <label>
-          Фамилия
-          <input id="surname" name="surname" type="text" list="surname-suggestions" required />
-        </label>
-        <datalist id="surname-suggestions"></datalist>
 
         <div class="actions single">
           <button id="check-btn" type="button">Проверить посещение</button>
